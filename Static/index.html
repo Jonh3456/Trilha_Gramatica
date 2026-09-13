@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trilha Gramatical — Prática de Inglês</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a href="#main" class="skip-link">Pular para o conteúdo principal</a>
+
+<!-- ==================== AUTH SCREEN (login / cadastro) ==================== -->
+<section id="view-auth" class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <span class="brand-mark" aria-hidden="true">◆</span>
+      <span class="brand-name">Trilha Gramatical</span>
+    </div>
+    <p class="auth-subtitle">Entre para salvar seu progresso na nuvem.</p>
+
+    <div id="authError" class="auth-message hidden" role="alert"></div>
+
+    <form id="formLogin" class="auth-form">
+      <label for="loginEmail">E-mail</label>
+      <input type="email" id="loginEmail" autocomplete="username" required>
+      <label for="loginPassword">Senha</label>
+      <input type="password" id="loginPassword" autocomplete="current-password" required>
+      <button type="submit" class="btn-primary">Entrar</button>
+    </form>
+
+    <form id="formSignup" class="auth-form hidden">
+      <label for="signupEmail">E-mail</label>
+      <input type="email" id="signupEmail" autocomplete="username" required>
+      <label for="signupPassword">Senha (mín. 6 caracteres)</label>
+      <input type="password" id="signupPassword" autocomplete="new-password" required minlength="6">
+      <button type="submit" class="btn-primary">Criar conta</button>
+    </form>
+
+    <button id="btnToggleAuthMode" class="link-btn auth-toggle">Ainda não tem conta? Criar conta</button>
+  </div>
+</section>
+
+<!-- ==================== MAIN APP (hidden until logged in) ==================== -->
+<div id="appRoot" class="hidden">
+<header class="app-header">
+  <div class="header-inner">
+    <button id="btnHome" class="brand" aria-label="Ir para a tela inicial">
+      <span class="brand-mark" aria-hidden="true">◆</span>
+      <span class="brand-name">Trilha Gramatical</span>
+    </button>
+    <div class="header-stats" id="headerStats" aria-live="polite">
+      <span class="stat" title="Pontuação"><span aria-hidden="true">★</span> <span id="statScore">0</span></span>
+      <span class="stat energy" title="Energia"><span aria-hidden="true">⚡</span> <span id="statEnergy">100</span></span>
+    </div>
+    <button id="btnAccount" class="icon-btn" aria-label="Conta">👤</button>
+    <button id="btnTheme" class="icon-btn" aria-label="Alternar modo claro/escuro">🌓</button>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- HOME / CHAPTER SELECT -->
+  <section id="view-home" class="view" aria-labelledby="homeTitle">
+    <h1 id="homeTitle">Capítulos</h1>
+    <p class="subtitle">Baseado em <cite>English for Everyone: English Grammar Guide — Practice Book</cite> (DK). Escolha um capítulo para começar.</p>
+    <div id="chapterList" class="card-grid" role="list"></div>
+  </section>
+
+  <!-- UNIT SELECT (within a chapter) -->
+  <section id="view-chapter" class="view hidden" aria-labelledby="chapterTitle">
+    <button class="btn-back" id="btnBackToHome" aria-label="Voltar para capítulos">← Capítulos</button>
+    <h1 id="chapterTitle">Capítulo</h1>
+    <p class="subtitle" id="chapterSubtitle"></p>
+    <div id="unitList" class="unit-list" role="list"></div>
+  </section>
+
+  <!-- LESSON RUNNER -->
+  <section id="view-lesson" class="view hidden" aria-labelledby="lessonTitle">
+    <div class="lesson-topbar">
+      <button class="icon-btn" id="btnExitLesson" aria-label="Sair da lição">✕</button>
+      <div class="progress-track" role="progressbar" aria-label="Progresso da lição" id="progressBar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <span class="progress-label" id="progressLabel">0 / 0</span>
+    </div>
+
+    <h2 id="lessonTitle" class="sr-only">Lição</h2>
+
+    <div id="exerciseStage" class="exercise-stage" aria-live="polite"></div>
+
+    <div class="lesson-footer">
+      <div id="feedbackBanner" class="feedback-banner hidden" role="status"></div>
+      <button id="btnCheck" class="btn-primary" disabled>Verificar</button>
+      <button id="btnContinue" class="btn-primary hidden">Continuar</button>
+    </div>
+  </section>
+
+  <!-- LESSON SUMMARY -->
+  <section id="view-summary" class="view hidden" aria-labelledby="summaryTitle">
+    <div class="summary-card">
+      <h1 id="summaryTitle">Lição concluída!</h1>
+      <div class="summary-stats">
+        <div class="summary-stat"><span class="big" id="sumScore">0</span><span>pontos</span></div>
+        <div class="summary-stat"><span class="big" id="sumAccuracy">0%</span><span>acerto na 1ª tentativa</span></div>
+        <div class="summary-stat"><span class="big" id="sumReview">0</span><span>revisados</span></div>
+      </div>
+      <div class="summary-actions">
+        <button class="btn-primary" id="btnBackToUnits">Continuar estudando</button>
+        <button class="btn-secondary" id="btnRedoLesson">Refazer esta lição</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACCOUNT / CHANGE PASSWORD -->
+  <section id="view-account" class="view hidden" aria-labelledby="accountTitle">
+    <button class="btn-back" id="btnBackFromAccount">← Voltar</button>
+    <h1 id="accountTitle">Minha conta</h1>
+    <p class="subtitle" id="accountEmail"></p>
+
+    <div id="accountMessage" class="auth-message hidden" role="alert"></div>
+
+    <form id="formChangePassword" class="auth-form account-form">
+      <h3>Trocar senha</h3>
+      <label for="curPassword">Senha atual</label>
+      <input type="password" id="curPassword" autocomplete="current-password" required>
+      <label for="newPassword">Nova senha (mín. 6 caracteres)</label>
+      <input type="password" id="newPassword" autocomplete="new-password" required minlength="6">
+      <label for="newPassword2">Confirmar nova senha</label>
+      <input type="password" id="newPassword2" autocomplete="new-password" required minlength="6">
+      <button type="submit" class="btn-primary">Salvar nova senha</button>
+    </form>
+
+    <button id="btnLogout" class="btn-secondary account-logout">Sair da conta</button>
+  </section>
+
+</main>
+
+<footer class="app-footer">
+  <button id="btnResetProgress" class="link-btn">Apagar todo o progresso</button>
+  <span class="footer-note">Conteúdo derivado de material didático de uso pessoal autorizado — não redistribuir.</span>
+</footer>
+</div>
+
+<div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="content.js"></script>
+<script src="auth.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
