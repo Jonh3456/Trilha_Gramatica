@@ -5,8 +5,8 @@
    a segurança real vem das políticas RLS criadas em schema.sql.
    ========================================================================== */
 
-const SUPABASE_URL = "COLE_AQUI_A_SUA_SUPABASE_URL";
-const SUPABASE_ANON_KEY = "COLE_AQUI_A_SUA_SUPABASE_ANON_KEY";
+const SUPABASE_URL = "https://ncdqfcpftphojfvzycwi.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jZHFmY3BmdHBob2pmdnp5Y3dpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkzMjM0NjcsImV4cCI6MjEwNDg5OTQ2N30.3lrVP-RCkfCw2w2a8K1TGsqmIawWaHmXqNUVrV0Qp7Y";
 
 let supabaseClient = null;
 let currentSession = null;
