@@ -333,6 +333,25 @@ function speak(text) {
 // ---------------------------------------------------------------------------
 // Exercise renderers
 // ---------------------------------------------------------------------------
+
+// BUGFIX: some "REWRITE THE SENTENCES, PUTTING THE WORDS IN THE CORRECT ORDER"
+// exercises were mis-tagged as type "transform" during the PDF extraction,
+// because the stored instruction text was truncated right before the word
+// "ORDER" (the classifier never saw it). These items are still recognizable
+// at render time because their raw content preserves the original "||"
+// separated word fragments from the book. We detect that pattern here and
+// route them to the word-tile UI instead of a free-text box, regardless of
+// what the "type" field says.
+function looksLikeWordTiles(content) {
+  return typeof content === "string" && /\|\|/.test(content);
+}
+function deriveTilesFromContent(content) {
+  return content
+    .split(/\|\|+/)
+    .map(t => t.replace(/[\[\]{}()"']/g, "").replace(/\s+/g, " ").trim())
+    .filter(t => t.length > 0 && /[A-Za-z]/.test(t));
+}
+
 function renderExercise(ex) {
   const stage = document.getElementById("exerciseStage");
   document.getElementById("btnCheck").disabled = true;
@@ -346,6 +365,11 @@ function renderExercise(ex) {
   stage.appendChild(head);
 
   if (ex.manualReview) { renderReviewCard(stage, ex); return; }
+
+  if (ex.type !== "reorder-words" && looksLikeWordTiles(ex.content) && ex.correctAnswer) {
+    renderReorder(stage, ex);
+    return;
+  }
 
   switch (ex.type) {
     case "fill-blank": renderFillBlank(stage, ex); break;
@@ -440,7 +464,14 @@ function renderMultipleChoice(stage, ex) {
 }
 
 function renderReorder(stage, ex) {
-  const words = ex.options && ex.options.length ? [...ex.options] : (ex.content || "").split(/\s+/);
+  let words;
+  if (ex.options && ex.options.length) {
+    words = [...ex.options];
+  } else if (looksLikeWordTiles(ex.content)) {
+    words = deriveTilesFromContent(ex.content);
+  } else {
+    words = (ex.content || "").split(/\s+/).filter(Boolean);
+  }
   shuffle(words);
   const wrap = document.createElement("div");
   wrap.innerHTML = `<p class="ex-hint">Toque nas palavras na ordem correta para formar a frase.</p>`;
@@ -554,7 +585,10 @@ function doCheck() {
   const stage = document.getElementById("exerciseStage");
   let isCorrect = false;
 
-  if (ex.type === "fill-blank" || ex.type === "correction" || ex.type === "rewrite" || ex.type === "transform") {
+  if (stage._getReorderAnswer) {
+    const given = stage._getReorderAnswer();
+    isCorrect = answersMatch(given, ex.correctAnswer || "");
+  } else if (ex.type === "fill-blank" || ex.type === "correction" || ex.type === "rewrite" || ex.type === "transform") {
     const input = document.getElementById("answerInput");
     const given = input ? input.value : "";
     let toCompare = given;
