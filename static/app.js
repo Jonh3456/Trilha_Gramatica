@@ -276,7 +276,8 @@ function finishLesson() {
 // ---------------------------------------------------------------------------
 function normalizeAnswer(s) {
   if (s === null || s === undefined) return "";
-  return s.toString().toLowerCase().replace(/\s+/g, " ").replace(/[.,!?;:]+$/g, "").trim();
+  const cleaned = cleanForDisplay(s.toString());
+  return cleaned.toLowerCase().replace(/\s+/g, " ").replace(/[.,!?;:]+$/g, "").trim();
 }
 function answersMatch(given, correct) {
   const g = normalizeAnswer(given), c = normalizeAnswer(correct);
@@ -304,7 +305,7 @@ function grade(isCorrect) {
     banner.classList.add("incorrect");
     let explain = "";
     if (session.current.ex.correctAnswer) {
-      explain = `<div class="explain">Resposta esperada: <strong>${escapeHtml(session.current.ex.correctAnswer)}</strong></div>`;
+      explain = `<div class="explain">Resposta esperada: <strong>${escapeHtml(cleanForDisplay(session.current.ex.correctAnswer))}</strong></div>`;
     }
     banner.innerHTML = `<span>✗ Não foi dessa vez.</span>${explain}`;
     progress.energy = Math.max(10, progress.energy - 6);
@@ -317,6 +318,49 @@ function escapeHtml(s) {
   const d = document.createElement("div");
   d.textContent = s;
   return d.innerHTML;
+}
+
+// ---------------------------------------------------------------------------
+// OCR artifact cleanup (cosmetic + comparison-safe)
+// ---------------------------------------------------------------------------
+// Some sentences carry leftover OCR noise from the book's checkbox/bullet
+// glyphs: a trailing stray digit or "|"/"[]" right after the sentence, or a
+// short garbled token before the sentence's real capitalized start (e.g.
+// "a 1 My dad watchs TV..." or "Xd J Steve usually..."). These helpers strip
+// that noise for display and for answer comparison, without touching the
+// sentence's actual wording.
+function cleanTrailingArtifacts(s) {
+  if (!s) return s;
+  let out = s;
+  for (let i = 0; i < 2; i++) {
+    out = out.replace(/\s+[|[\]]{1,2}\s*$/, "");
+    out = out.replace(/\s+\d\s*$/, "");
+  }
+  return out.trim();
+}
+const COMMON_LEAD_WORDS = new Set([
+  "i","a","an","is","am","are","we","he","it","do","to","of","in","on","at","my",
+  "up","no","if","so","us","or","the","and","but","you","she","they","this","that",
+  "was","were","has","have","had","will","would","can","could","should","must","not","did"
+]);
+function cleanLeadingArtifacts(s) {
+  if (!s) return s;
+  const m = s.match(/^((?:[A-Za-z0-9]{1,3}\.?\s+){1,2})(?=[A-Z][a-z])/);
+  if (!m) return s;
+  const tokens = m[1].trim().split(/\s+/).map(t => t.replace(/\.$/, "").toLowerCase());
+  const looksLikeRealWords = tokens.some(t => COMMON_LEAD_WORDS.has(t));
+  if (looksLikeRealWords) return s; // don't risk stripping a legitimate short word
+  return s.slice(m[1].length);
+}
+function cleanForDisplay(s) {
+  // NOTE: only trailing-artifact cleanup is applied broadly (safe/deterministic).
+  // Leading-artifact cleanup is deliberately NOT applied here: it risks
+  // stripping real short words ("a", "an", "I") that happen to precede a
+  // capitalized word, which would silently corrupt otherwise-correct
+  // sentences. It's only used in the isolated 2-option review-card display
+  // (see renderReviewCard), where it's purely cosmetic and never affects
+  // grading.
+  return cleanTrailingArtifacts((s || "").toString());
 }
 
 // ---------------------------------------------------------------------------
@@ -386,11 +430,23 @@ function renderExercise(ex) {
 function renderReviewCard(stage, ex) {
   const div = document.createElement("div");
   div.className = "review-card";
-  div.innerHTML = `
-    <span class="flag">Revisão necessária</span>
-    <p>Este item não pôde ser convertido automaticamente com segurança (ex.: depende de imagem, ou o texto reconhecido do livro ficou ambíguo). Confira a página original antes de estudar este item.</p>
-    <div class="raw">${escapeHtml(ex.content || "(sem conteúdo bruto disponível)")}</div>
-  `;
+  let bodyHtml;
+  if (ex.type === "multiple-choice" && Array.isArray(ex.options) && ex.options.length === 2) {
+    // Show the two candidate sentences as separate, readable lines instead
+    // of the raw "optionA  /  optionB" joined string.
+    const optA = cleanLeadingArtifacts(cleanForDisplay(ex.options[0]));
+    const optB = cleanLeadingArtifacts(cleanForDisplay(ex.options[1]));
+    bodyHtml = `
+      <p>Não foi possível confirmar com segurança qual alternativa é a correta. Compare com a página original antes de decidir:</p>
+      <div class="raw">A) ${escapeHtml(optA)}\nB) ${escapeHtml(optB)}</div>
+    `;
+  } else {
+    bodyHtml = `
+      <p>Este item não pôde ser convertido automaticamente com segurança (ex.: depende de imagem, ou o texto reconhecido do livro ficou ambíguo). Confira a página original antes de estudar este item.</p>
+      <div class="raw">${escapeHtml(cleanForDisplay(ex.content) || "(sem conteúdo bruto disponível)")}</div>
+    `;
+  }
+  div.innerHTML = `<span class="flag">Revisão necessária</span>` + bodyHtml;
   stage.appendChild(div);
   const actions = document.createElement("div");
   actions.className = "review-actions";
@@ -401,33 +457,38 @@ function renderReviewCard(stage, ex) {
 }
 
 function renderFillBlank(stage, ex) {
-  const wrap = document.createElement("div");
   const parts = (ex.content || "").split("___");
-  let html = `<div class="ex-prompt">`;
-  if (parts.length > 1) {
-    html += escapeHtml(parts[0]) + `<input type="text" class="blank-input" id="answerInput" aria-label="Resposta" autocomplete="off">` + escapeHtml(parts.slice(1).join("___"));
-    stage._blankParts = parts;
-  } else {
-    html += escapeHtml(ex.content || "");
+  if (parts.length <= 1) {
+    // BUGFIX: content has no "___" marker (common when the blank was empty
+    // space in the book and OCR captured nothing there). Previously this
+    // rendered the sentence once with no input, detected the missing input,
+    // and then called renderTextAnswer() as a "fallback" — which rendered
+    // the SAME sentence a second time, this time with the input box. That
+    // caused the visible duplicate-text bug. Route straight to the
+    // single-render free-text UI instead.
+    renderTextAnswer(stage, ex);
+    return;
   }
-  html += `</div>`;
+  const wrap = document.createElement("div");
+  const html = `<div class="ex-prompt">` +
+    escapeHtml(cleanForDisplay(parts[0])) +
+    `<input type="text" class="blank-input" id="answerInput" aria-label="Resposta" autocomplete="off">` +
+    escapeHtml(cleanForDisplay(parts.slice(1).join("___"))) +
+    `</div>`;
+  stage._blankParts = parts;
   wrap.innerHTML = html;
   stage.appendChild(wrap);
 
   const input = document.getElementById("answerInput");
-  if (input) {
-    input.addEventListener("input", () => { document.getElementById("btnCheck").disabled = input.value.trim().length === 0; });
-    input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !document.getElementById("btnCheck").disabled) doCheck(); });
-    setTimeout(() => input.focus(), 50);
-  } else {
-    renderTextAnswer(stage, ex);
-  }
+  input.addEventListener("input", () => { document.getElementById("btnCheck").disabled = input.value.trim().length === 0; });
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !document.getElementById("btnCheck").disabled) doCheck(); });
+  setTimeout(() => input.focus(), 50);
 }
 
 function renderTextAnswer(stage, ex) {
   const wrap = document.createElement("div");
   wrap.innerHTML = `
-    <div class="ex-prompt">${escapeHtml(ex.content || "")}</div>
+    <div class="ex-prompt">${escapeHtml(cleanForDisplay(ex.content || ""))}</div>
     <input type="text" class="text-answer-input" id="answerInput" aria-label="Digite sua resposta" autocomplete="off" placeholder="Digite a frase...">
   `;
   stage.appendChild(wrap);
@@ -439,12 +500,13 @@ function renderTextAnswer(stage, ex) {
 
 function renderMultipleChoice(stage, ex) {
   const wrap = document.createElement("div");
-  wrap.innerHTML = `<div class="ex-prompt">${escapeHtml(ex.content || "")}</div>`;
+  wrap.innerHTML = `<div class="ex-prompt">${escapeHtml(cleanForDisplay(ex.content || ""))}</div>`;
   const list = document.createElement("div");
   list.className = "choice-list";
   list.setAttribute("role", "radiogroup");
-  const opts = ex.options && ex.options.length ? ex.options : ["Correto", "Incorreto"];
-  opts.forEach((opt) => {
+  const rawOpts = ex.options && ex.options.length ? ex.options : ["Correto", "Incorreto"];
+  rawOpts.forEach((rawOpt) => {
+    const opt = cleanForDisplay(rawOpt);
     const item = document.createElement("button");
     item.className = "choice-item";
     item.setAttribute("role", "radio");
